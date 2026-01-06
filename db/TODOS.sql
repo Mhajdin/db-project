@@ -13,7 +13,7 @@ CREATE TABLE mitglied (
     email VARCHAR(150),
     telefon VARCHAR(30),
     beitrittsdatum DATE,
-    status VARCHAR(50),
+    status VARCHAR(50), 
     notizen TEXT
 );
 CREATE TABLE abo (
