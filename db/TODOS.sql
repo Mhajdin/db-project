@@ -1,9 +1,3 @@
-DROP TABLE uebung;
-DROP TABLE trainingsplan;
-DROP TABLE abo;
-DROP TABLE kurs;
-DROP TABLE mitglied;
-
 CREATE TABLE mitglied (
     mitglied_id INT AUTO_INCREMENT PRIMARY KEY,
     vorname VARCHAR(100) NOT NULL,
