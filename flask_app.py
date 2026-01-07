@@ -132,3 +132,106 @@ def complete():
 
 if __name__ == "__main__":
     app.run()
+from flask import Flask, redirect, render_template, request, url_for 
+def _first_value(row):
+    """Robustly extract first value from tuple/dict/str returned by db_read."""
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return next(iter(row.values()), None)
+    if isinstance(row, (list, tuple)) and len(row) > 0:
+        return row[0]
+    return row
+
+
+@app.route("/dbexplorer", methods=["GET", "POST"])
+@login_required
+def dbexplorer():
+    # 1) Get available tables
+    try:
+        raw_tables = db_read("SHOW TABLES")
+        tables = [str(_first_value(r)) for r in raw_tables]
+        tables = [t for t in tables if t]  # remove None/empty
+        tables.sort()
+    except Exception as e:
+        return render_template(
+            "dbexplorer.html",
+            tables=[],
+            selected_table=None,
+            columns=[],
+            rows=[],
+            limit=50,
+            filter_column="",
+            filter_value="",
+            error=f"Konnte Tabellen nicht laden: {e}",
+        )
+
+    # 2) Defaults
+    selected_table = request.values.get("table")  # works for GET & POST
+    limit_str = request.values.get("limit", "50")
+    filter_column = request.values.get("filter_column", "")
+    filter_value = request.values.get("filter_value", "")
+
+    # sanitize limit
+    try:
+        limit = int(limit_str)
+        if limit < 1:
+            limit = 1
+        if limit > 500:
+            limit = 500
+    except ValueError:
+        limit = 50
+
+    rows = []
+    columns = []
+    error = None
+
+    # 3) If a table is selected, validate and query it
+    if selected_table:
+        if selected_table not in tables:
+            error = "Ungültige Tabelle ausgewählt."
+            selected_table = None
+        else:
+            try:
+                # Get column names for dropdown
+                raw_cols = db_read(f"SHOW COLUMNS FROM `{selected_table}`")
+                columns = []
+                for r in raw_cols:
+                    if isinstance(r, dict) and "Field" in r:
+                        columns.append(r["Field"])
+                    else:
+                        columns.append(str(_first_value(r)))
+                columns = [c for c in columns if c]
+
+                # Optional filter (validated column only)
+                where_sql = ""
+                params = []
+
+                if filter_column and filter_value:
+                    if filter_column not in columns:
+                        error = "Ungültige Spalte für Filter."
+                    else:
+                        where_sql = f" WHERE `{filter_column}` LIKE %s "
+                        params.append(f"%{filter_value}%")
+
+                # Main query (read-only)
+                sql = f"SELECT * FROM `{selected_table}`{where_sql} LIMIT %s"
+                params.append(limit)
+
+                rows = db_read(sql, tuple(params))
+
+            except Exception as e:
+                error = f"Fehler beim Laden der Tabelle: {e}"
+
+    # 4) Render
+    return render_template(
+        "dbexplorer.html",
+        tables=tables,
+        selected_table=selected_table,
+        columns=columns,
+        rows=rows,
+        limit=limit,
+        filter_column=filter_column,
+        filter_value=filter_value,
+        error=error,
+    )

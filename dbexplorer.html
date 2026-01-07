@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <div style="max-width: 1100px; margin: 0 auto;">
+    <h2>DB Explorer</h2>
+    <p>Wähle eine Tabelle aus und lass dir die Daten anzeigen (read-only).</p>
+
+    {% if error %}
+      <div style="padding: 10px; margin: 10px 0; border: 1px solid #d33; background: #ffecec;">
+        {{ error }}
+      </div>
+    {% endif %}
+
+    <!-- TABLE BUTTONS -->
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0;">
+      {% for t in tables %}
+        <form method="GET" action="{{ url_for('dbexplorer') }}" style="margin: 0;">
+          <input type="hidden" name="table" value="{{ t }}">
+          <input type="hidden" name="limit" value="{{ limit }}">
+          <button type="submit"
+                  style="padding: 8px 12px; border: 1px solid #999; border-radius: 8px; cursor: pointer;
+                         {% if selected_table == t %}font-weight: 700; border-color: #333;{% endif %}">
+            {{ t }}
+          </button>
+        </form>
+      {% endfor %}
+    </div>
+
+    <!-- OPTIONS / FILTER -->
+    <form method="GET" action="{{ url_for('dbexplorer') }}"
+          style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 10px; align-items: end; margin: 14px 0;">
+      <div>
+        <label for="table">Tabelle</label>
+        <input id="table" name="table" type="text" value="{{ selected_table or '' }}"
+               placeholder="z.B. mitglied" style="width: 100%; padding: 8px;">
+        <small>Oder nutze die Buttons oben.</small>
+      </div>
+
+      <div>
+        <label for="limit">Limit (1–500)</label>
+        <input id="limit" name="limit" type="number" min="1" max="500" value="{{ limit }}"
+               style="width: 100%; padding: 8px;">
+      </div>
+
+      <div>
+        <label for="filter_column">Filter-Spalte (optional)</label>
+        <select id="filter_column" name="filter_column" style="width: 100%; padding: 8px;">
+          <option value="">— keine —</option>
+          {% for c in columns %}
+            <option value="{{ c }}" {% if filter_column == c %}selected{% endif %}>{{ c }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div>
+        <label for="filter_value">enthält (optional)</label>
+        <input id="filter_value" name="filter_value" type="text" value="{{ filter_value }}"
+               placeholder="z.B. Meier" style="width: 100%; padding: 8px;">
+      </div>
+
+      <div style="grid-column: 1 / -1; display: flex; gap: 10px;">
+        <button type="submit" style="padding: 10px 14px; border-radius: 8px; cursor: pointer;">
+          Anzeigen
+        </button>
+
+        <a href="{{ url_for('dbexplorer') }}"
+           style="padding: 10px 14px; border-radius: 8px; border: 1px solid #999; text-decoration: none;">
+          Reset
+        </a>
+      </div>
+    </form>
+
+    <!-- RESULTS -->
+    {% if selected_table %}
+      <h3 style="margin-top: 18px;">Tabelle: {{ selected_table }}</h3>
+
+      {% if rows and rows|length > 0 %}
+        {% set first = rows[0] %}
+        {% set is_dict = first is mapping %}
+
+        <div style="overflow-x: auto; border: 1px solid #ddd; border-radius: 10px;">
+          <table style="border-collapse: collapse; width: 100%; min-width: 700px;">
+            <thead>
+              <tr style="background: #f4f4f4;">
+                {% if is_dict %}
+                  {% for k in first.keys() %}
+                    <th style="text-align: left; padding: 10px; border-bottom: 1px solid #ddd;">{{ k }}</th>
+                  {% endfor %}
+                {% else %}
+                  {% for v in first %}
+                    <th style="text-align: left; padding: 10px; border-bottom: 1px solid #ddd;">Spalte {{ loop.index }}</th>
+                  {% endfor %}
+                {% endif %}
+              </tr>
+            </thead>
+
+            <tbody>
+              {% for r in rows %}
+                <tr>
+                  {% if is_dict %}
+                    {% for v in r.values() %}
+                      <td style="padding: 10px; border-bottom: 1px solid #eee; white-space: nowrap;">
+                        {{ v }}
+                      </td>
+                    {% endfor %}
+                  {% else %}
+                    {% for v in r %}
+                      <td style="padding: 10px; border-bottom: 1px solid #eee; white-space: nowrap;">
+                        {{ v }}
+                      </td>
+                    {% endfor %}
+                  {% endif %}
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div style="padding: 10px; border: 1px solid #ddd; background: #fafafa; border-radius: 10px;">
+          Keine Daten gefunden (oder Filter liefert keine Treffer).
+        </div>
+      {% endif %}
+    {% endif %}
+  </div>
+{% endblock %}
