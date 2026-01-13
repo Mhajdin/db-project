@@ -74,4 +74,4 @@ INSERT INTO trainingsplan (mitglied_id, titel, startdatum, erstellt_am) VALUES
 INSERT INTO uebung (plan_id, name, satz, wiederholungen, gewicht) VALUES
 (1, 'Kniebeuge', 3, 12, 20.0),
 (1, 'Liegestütze', 3, 10, 0.0),
-(2, 'Bankdrücken', 4, 8, 40.0);
+(2, 'Bankdrücken', 4, 8, 40.0); 
