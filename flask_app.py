@@ -1,3 +1,6 @@
+# ----------------------------
+# Imports (alles ganz oben)
+# ----------------------------
 from flask import Flask, redirect, render_template, request, url_for
 from dotenv import load_dotenv
 import os
@@ -14,39 +17,54 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
-# Load .env variables
 load_dotenv()
 W_SECRET = os.getenv("W_SECRET")
 
-# Init flask app
+
 app = Flask(__name__)
 app.config["DEBUG"] = True
 app.secret_key = "supersecret"
 
-# Init auth
+
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
+
+
 # DON'T CHANGE
 def is_valid_signature(x_hub_signature, data, private_key):
-    hash_algorithm, github_signature = x_hub_signature.split('=', 1)
+    hash_algorithm, github_signature = x_hub_signature.split("=", 1)
     algorithm = hashlib.__dict__.get(hash_algorithm)
-    encoded_key = bytes(private_key, 'latin-1')
+    encoded_key = bytes(private_key, "latin-1")
     mac = hmac.new(encoded_key, msg=data, digestmod=algorithm)
     return hmac.compare_digest(mac.hexdigest(), github_signature)
 
+
+def _first_value(row):
+    """Robustly extract first value from tuple/dict/str returned by db_read."""
+    if row is None:
+        return None
+    if isinstance(row, dict):
+        return next(iter(row.values()), None)
+    if isinstance(row, (list, tuple)) and len(row) > 0:
+        return row[0]
+    return row
+
+
+
 # DON'T CHANGE
-@app.post('/update_server')
+@app.post("/update_server")
 def webhook():
-    x_hub_signature = request.headers.get('X-Hub-Signature')
+    x_hub_signature = request.headers.get("X-Hub-Signature")
     if is_valid_signature(x_hub_signature, request.data, W_SECRET):
-        repo = git.Repo('./mysite')
+        repo = git.Repo("./mysite")
         origin = repo.remotes.origin
         origin.pull()
-        return 'Updated PythonAnywhere successfully', 200
-    return 'Unathorized', 401
+        return "Updated PythonAnywhere successfully", 200
+    return "Unathorized", 401
 
-# Auth routes
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
@@ -100,49 +118,42 @@ def register():
         footer_link_label="Einloggen"
     )
 
+
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
     return redirect(url_for("index"))
-
-
-
-# App routes
 @app.route("/", methods=["GET", "POST"])
 @login_required
 def index():
     # GET
     if request.method == "GET":
-        todos = db_read("SELECT id, content, due FROM todos WHERE user_id=%s ORDER BY due", (current_user.id,))
+        todos = db_read(
+            "SELECT id, content, due FROM todos WHERE user_id=%s ORDER BY due",
+            (current_user.id,)
+        )
         return render_template("main_page.html", todos=todos)
 
     # POST
     content = request.form["contents"]
     due = request.form["due_at"]
-    db_write("INSERT INTO todos (user_id, content, due) VALUES (%s, %s, %s)", (current_user.id, content, due, ))
+    db_write(
+        "INSERT INTO todos (user_id, content, due) VALUES (%s, %s, %s)",
+        (current_user.id, content, due,)
+    )
     return redirect(url_for("index"))
+
 
 @app.post("/complete")
 @login_required
 def complete():
     todo_id = request.form.get("id")
-    db_write("DELETE FROM todos WHERE user_id=%s AND id=%s", (current_user.id, todo_id,))
+    db_write(
+        "DELETE FROM todos WHERE user_id=%s AND id=%s",
+        (current_user.id, todo_id,)
+    )
     return redirect(url_for("index"))
-
-if __name__ == "__main__":
-    app.run()
-from flask import Flask, redirect, render_template, request, url_for 
-def _first_value(row):
-    """Robustly extract first value from tuple/dict/str returned by db_read."""
-    if row is None:
-        return None
-    if isinstance(row, dict):
-        return next(iter(row.values()), None)
-    if isinstance(row, (list, tuple)) and len(row) > 0:
-        return row[0]
-    return row
-
 
 @app.route("/dbexplorer", methods=["GET", "POST"])
 @login_required
@@ -151,7 +162,7 @@ def dbexplorer():
     try:
         raw_tables = db_read("SHOW TABLES")
         tables = [str(_first_value(r)) for r in raw_tables]
-        tables = [t for t in tables if t]  # remove None/empty
+        tables = [t for t in tables if t]
         tables.sort()
     except Exception as e:
         return render_template(
@@ -167,7 +178,7 @@ def dbexplorer():
         )
 
     # 2) Defaults
-    selected_table = request.values.get("table")  # works for GET & POST
+    selected_table = request.values.get("table")
     limit_str = request.values.get("limit", "50")
     filter_column = request.values.get("filter_column", "")
     filter_value = request.values.get("filter_value", "")
@@ -235,3 +246,5 @@ def dbexplorer():
         filter_value=filter_value,
         error=error,
     )
+if __name__ == "__main__":
+    app.run()
