@@ -1,6 +1,4 @@
-# ----------------------------
-# Imports (alles ganz oben)
-# ----------------------------
+
 from flask import Flask, redirect, render_template, request, url_for
 from dotenv import load_dotenv
 import os
