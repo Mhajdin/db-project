@@ -132,25 +132,21 @@ def dbexplorer():
     rows = []
     columns = []
 
-    # URL-Parameter
     selected_table = request.args.get("table")
     limit_raw = request.args.get("limit", "50")
     filter_column = request.args.get("filter_column", "")
     filter_value = request.args.get("filter_value", "")
 
-    # Limit absichern
     try:
         limit = max(1, min(int(limit_raw), 500))
     except ValueError:
         limit = 50
 
-    # Tabellen laden
     raw_tables = db_read("SHOW TABLES", ())
     tables = [str(_first_value(r)) for r in raw_tables if _first_value(r)]
     tables.sort()
 
     if selected_table and selected_table in tables:
-        # Spalten laden
         raw_cols = db_read(f"SHOW COLUMNS FROM `{selected_table}`", ())
         columns = [
             r["Field"] if isinstance(r, dict) else _first_value(r)
@@ -181,32 +177,47 @@ def dbexplorer():
     )
 
 # -------------------------------------------------
-# EINZIGE ERLAUBTE ÄNDERUNG: abo.enddatum
+# EINZIGE ERLAUBTE EINGABE: uebung (INSERT ONLY)
 # -------------------------------------------------
-@app.post("/dbexplorer/update_enddatum")
+@app.post("/dbexplorer/insert_uebung")
 @login_required
-def update_abo_enddatum():
-    abo_id = request.form.get("abo_id")
-    enddatum = request.form.get("enddatum", "").strip()
+def insert_uebung():
+    plan_id = request.form.get("plan_id")
+    name = request.form.get("name", "").strip()
+    wiederholungen = request.form.get("wiederholungen", "").strip()
+    dauer = request.form.get("dauer", "").strip()
 
     try:
-        abo_id = int(abo_id)
+        plan_id = int(plan_id)
     except (TypeError, ValueError):
-        return redirect(url_for("dbexplorer", table="abo", error="Ungültige ID"))
+        return redirect(url_for("dbexplorer", table="uebung", error="Ungültiger Trainingsplan"))
 
-    if enddatum == "":
-        db_write("UPDATE abo SET enddatum=NULL WHERE abo_id=%s", (abo_id,))
+    if not name:
+        return redirect(url_for("dbexplorer", table="uebung", error="Übung darf nicht leer sein"))
+
+    try:
+        wiederholungen = int(wiederholungen)
+        if wiederholungen <= 0:
+            raise ValueError()
+    except ValueError:
+        return redirect(url_for("dbexplorer", table="uebung", error="Wiederholungen müssen > 0 sein"))
+
+    if dauer == "":
+        dauer_val = None
     else:
-        if not re.match(r"^\d{4}-\d{2}-\d{2}$", enddatum):
-            return redirect(
-                url_for("dbexplorer", table="abo", error="Datum muss YYYY-MM-DD sein")
-            )
-        db_write(
-            "UPDATE abo SET enddatum=%s WHERE abo_id=%s",
-            (enddatum, abo_id)
-        )
+        try:
+            dauer_val = int(dauer)
+            if dauer_val <= 0:
+                raise ValueError()
+        except ValueError:
+            return redirect(url_for("dbexplorer", table="uebung", error="Dauer muss positiv sein"))
 
-    return redirect(url_for("dbexplorer", table="abo"))
+    db_write(
+        "INSERT INTO uebung (plan_id, name, wiederholungen, dauer) VALUES (%s, %s, %s, %s)",
+        (plan_id, name, wiederholungen, dauer_val)
+    )
+
+    return redirect(url_for("dbexplorer", table="uebung"))
 
 # -------------------------------------------------
 # App Start
