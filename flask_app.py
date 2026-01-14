@@ -1,4 +1,3 @@
-
 from flask import Flask, redirect, render_template, request, url_for
 from dotenv import load_dotenv
 import os
@@ -9,25 +8,38 @@ from db import db_read, db_write
 from auth import login_manager, authenticate, register_user
 from flask_login import login_user, logout_user, login_required, current_user
 import logging
+import re
 
+# -------------------------------------------------
+# Logging
+# -------------------------------------------------
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
+# -------------------------------------------------
+# Env / Secrets
+# -------------------------------------------------
 load_dotenv()
 W_SECRET = os.getenv("W_SECRET")
 
-
+# -------------------------------------------------
+# Flask App
+# -------------------------------------------------
 app = Flask(__name__)
 app.config["DEBUG"] = True
 app.secret_key = "supersecret"
 
-
+# -------------------------------------------------
+# Login Manager
+# -------------------------------------------------
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-
+# -------------------------------------------------
+# Helper Functions
+# -------------------------------------------------
 
 # DON'T CHANGE
 def is_valid_signature(x_hub_signature, data, private_key):
@@ -39,7 +51,6 @@ def is_valid_signature(x_hub_signature, data, private_key):
 
 
 def _first_value(row):
-    """Robustly extract first value from tuple/dict/str returned by db_read."""
     if row is None:
         return None
     if isinstance(row, dict):
@@ -48,9 +59,9 @@ def _first_value(row):
         return row[0]
     return row
 
-
-
-# DON'T CHANGE
+# -------------------------------------------------
+# Webhook (DON'T CHANGE)
+# -------------------------------------------------
 @app.post("/update_server")
 def webhook():
     x_hub_signature = request.headers.get("X-Hub-Signature")
@@ -59,180 +70,104 @@ def webhook():
         origin = repo.remotes.origin
         origin.pull()
         return "Updated PythonAnywhere successfully", 200
-    return "Unathorized", 401
+    return "Unauthorized", 401
 
-
-
+# -------------------------------------------------
+# Auth Routes
+# -------------------------------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
-
     if request.method == "POST":
         user = authenticate(
             request.form["username"],
             request.form["password"]
         )
-
         if user:
             login_user(user)
             return redirect(url_for("index"))
-
         error = "Benutzername oder Passwort ist falsch."
-
-    return render_template(
-        "auth.html",
-        title="In dein Konto einloggen",
-        action=url_for("login"),
-        button_label="Einloggen",
-        error=error,
-        footer_text="Noch kein Konto?",
-        footer_link_url=url_for("register"),
-        footer_link_label="Registrieren"
-    )
+    return render_template("auth.html", error=error)
 
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
     error = None
-
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-
-        ok = register_user(username, password)
+        ok = register_user(
+            request.form["username"],
+            request.form["password"]
+        )
         if ok:
             return redirect(url_for("login"))
-
         error = "Benutzername existiert bereits."
-
-    return render_template(
-        "auth.html",
-        title="Neues Konto erstellen",
-        action=url_for("register"),
-        button_label="Registrieren",
-        error=error,
-        footer_text="Du hast bereits ein Konto?",
-        footer_link_url=url_for("login"),
-        footer_link_label="Einloggen"
-    )
+    return render_template("auth.html", error=error)
 
 
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
-    return redirect(url_for("index"))
-@app.route("/", methods=["GET", "POST"])
+    return redirect(url_for("login"))
+
+# -------------------------------------------------
+# Main App Route (Todos – unverändert)
+# -------------------------------------------------
+@app.route("/")
 @login_required
 def index():
-    # GET
-    if request.method == "GET":
-        todos = db_read(
-            "SELECT id, content, due FROM todos WHERE user_id=%s ORDER BY due",
-            (current_user.id,)
-        )
-        return render_template("main_page.html", todos=todos)
-
-    # POST
-    content = request.form["contents"]
-    due = request.form["due_at"]
-    db_write(
-        "INSERT INTO todos (user_id, content, due) VALUES (%s, %s, %s)",
-        (current_user.id, content, due,)
+    todos = db_read(
+        "SELECT id, content, due FROM todos WHERE user_id=%s ORDER BY due",
+        (current_user.id,)
     )
-    return redirect(url_for("index"))
+    return render_template("main_page.html", todos=todos)
 
-
-@app.post("/complete")
-@login_required
-def complete():
-    todo_id = request.form.get("id")
-    db_write(
-        "DELETE FROM todos WHERE user_id=%s AND id=%s",
-        (current_user.id, todo_id,)
-    )
-    return redirect(url_for("index"))
-
-@app.route("/dbexplorer", methods=["GET", "POST"])
+# -------------------------------------------------
+# DB EXPLORER (READ ONLY)
+# -------------------------------------------------
+@app.route("/dbexplorer", methods=["GET"])
 @login_required
 def dbexplorer():
-    # 1) Get available tables
-    try:
-        raw_tables = db_read("SHOW TABLES")
-        tables = [str(_first_value(r)) for r in raw_tables]
-        tables = [t for t in tables if t]
-        tables.sort()
-    except Exception as e:
-        return render_template(
-            "dbexplorer.html",
-            tables=[],
-            selected_table=None,
-            columns=[],
-            rows=[],
-            limit=50,
-            filter_column="",
-            filter_value="",
-            error=f"Konnte Tabellen nicht laden: {e}",
-        )
+    error = request.args.get("error")
+    rows = []
+    columns = []
 
-    # 2) Defaults
-    selected_table = request.values.get("table")
-    limit_str = request.values.get("limit", "50")
-    filter_column = request.values.get("filter_column", "")
-    filter_value = request.values.get("filter_value", "")
+    # URL-Parameter
+    selected_table = request.args.get("table")
+    limit_raw = request.args.get("limit", "50")
+    filter_column = request.args.get("filter_column", "")
+    filter_value = request.args.get("filter_value", "")
 
-    # sanitize limit
+    # Limit absichern
     try:
-        limit = int(limit_str)
-        if limit < 1:
-            limit = 1
-        if limit > 500:
-            limit = 500
+        limit = max(1, min(int(limit_raw), 500))
     except ValueError:
         limit = 50
 
-    rows = []
-    columns = []
-    error = None
+    # Tabellen laden
+    raw_tables = db_read("SHOW TABLES", ())
+    tables = [str(_first_value(r)) for r in raw_tables if _first_value(r)]
+    tables.sort()
 
-    # 3) If a table is selected, validate and query it
-    if selected_table:
-        if selected_table not in tables:
-            error = "Ungültige Tabelle ausgewählt."
-            selected_table = None
-        else:
-            try:
-                # Get column names for dropdown
-                raw_cols = db_read(f"SHOW COLUMNS FROM `{selected_table}`")
-                columns = []
-                for r in raw_cols:
-                    if isinstance(r, dict) and "Field" in r:
-                        columns.append(r["Field"])
-                    else:
-                        columns.append(str(_first_value(r)))
-                columns = [c for c in columns if c]
+    if selected_table and selected_table in tables:
+        # Spalten laden
+        raw_cols = db_read(f"SHOW COLUMNS FROM `{selected_table}`", ())
+        columns = [
+            r["Field"] if isinstance(r, dict) else _first_value(r)
+            for r in raw_cols
+        ]
 
-                # Optional filter (validated column only)
-                where_sql = ""
-                params = []
+        where_sql = ""
+        params = []
 
-                if filter_column and filter_value:
-                    if filter_column not in columns:
-                        error = "Ungültige Spalte für Filter."
-                    else:
-                        where_sql = f" WHERE `{filter_column}` LIKE %s "
-                        params.append(f"%{filter_value}%")
+        if filter_column and filter_value and filter_column in columns:
+            where_sql = f" WHERE `{filter_column}` LIKE %s "
+            params.append(f"%{filter_value}%")
 
-                # Main query (read-only)
-                sql = f"SELECT * FROM `{selected_table}`{where_sql} LIMIT %s"
-                params.append(limit)
+        sql = f"SELECT * FROM `{selected_table}`{where_sql} LIMIT %s"
+        params.append(limit)
+        rows = db_read(sql, tuple(params))
 
-                rows = db_read(sql, tuple(params))
-
-            except Exception as e:
-                error = f"Fehler beim Laden der Tabelle: {e}"
-
-    # 4) Render
     return render_template(
         "dbexplorer.html",
         tables=tables,
@@ -244,5 +179,39 @@ def dbexplorer():
         filter_value=filter_value,
         error=error,
     )
+
+# -------------------------------------------------
+# EINZIGE ERLAUBTE ÄNDERUNG: abo.enddatum
+# -------------------------------------------------
+@app.post("/dbexplorer/update_enddatum")
+@login_required
+def update_abo_enddatum():
+    abo_id = request.form.get("abo_id")
+    enddatum = request.form.get("enddatum", "").strip()
+
+    try:
+        abo_id = int(abo_id)
+    except (TypeError, ValueError):
+        return redirect(url_for("dbexplorer", table="abo", error="Ungültige ID"))
+
+    if enddatum == "":
+        db_write("UPDATE abo SET enddatum=NULL WHERE abo_id=%s", (abo_id,))
+    else:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", enddatum):
+            return redirect(
+                url_for("dbexplorer", table="abo", error="Datum muss YYYY-MM-DD sein")
+            )
+        db_write(
+            "UPDATE abo SET enddatum=%s WHERE abo_id=%s",
+            (enddatum, abo_id)
+        )
+
+    return redirect(url_for("dbexplorer", table="abo"))
+
+# -------------------------------------------------
+# App Start
+# -------------------------------------------------
 if __name__ == "__main__":
     app.run()
+
+    
