@@ -153,32 +153,7 @@ def dbexplorer():
             for r in raw_cols
         ]
 
-        where_sql = ""
-        params = []
 
-        if filter_column and filter_value and filter_column in columns:
-            where_sql = f" WHERE `{filter_column}` LIKE %s "
-            params.append(f"%{filter_value}%")
-
-        sql = f"SELECT * FROM `{selected_table}`{where_sql} LIMIT %s"
-        params.append(limit)
-        rows = db_read(sql, tuple(params))
-
-    return render_template(
-        "dbexplorer.html",
-        tables=tables,
-        selected_table=selected_table,
-        columns=columns,
-        rows=rows,
-        limit=limit,
-        filter_column=filter_column,
-        filter_value=filter_value,
-        error=error,
-    )
-
-
-if __name__ == "__main__":
-    app.run()
 
 
 
