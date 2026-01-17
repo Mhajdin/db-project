@@ -120,6 +120,7 @@ INSERT INTO abo (mitglied_id, typ, startdatum, enddatum, preis, status) VALUES
 (30, 'Monatsabo', '2025-01-01', '2025-01-31', 59.90, 'aktiv'),
 (31, 'Jahresabo', '2024-12-01', '2025-11-30', 599.00, 'aktiv'),
 (32, 'Monatsabo', '2025-02-01', '2025-02-28', 59.90, 'aktiv'),
+
 INSERT INTO kurs (name, beschreibung, wochentag, startzeit, dauer, raum, trainer, max_plaetze) VALUES
 ('Yoga Flow', 'Mobilität und Balance', 'Montag', '18:00:00', 60, 'Studio 1', 'S. Frank', 20),
 ('HIIT', 'Intervalltraining mit hoher Intensität', 'Mittwoch', '19:00:00', 45, 'Studio 2', 'L. Frei', 18),
@@ -127,6 +128,7 @@ INSERT INTO kurs (name, beschreibung, wochentag, startzeit, dauer, raum, trainer
 ('Spinning', 'Cardio auf dem Bike', 'Freitag', '17:30:00', 50, 'Cycling Room', 'S. Baumann', 16),
 ('Functional Training', 'Ganzkörper Eigengewicht', 'Dienstag', '18:30:00', 55, 'Studio 3', 'M. Keller', 15),
 ('Core & Balance', 'Rumpfstabilität', 'Donnerstag', '17:00:00', 45, 'Studio 1', 'A. Meier', 20);
+
 INSERT INTO trainingsplan (mitglied_id, titel, startdatum, erstellt_am) VALUES
 (1, 'Ganzkörper – Einsteiger', '2024-09-05', '2024-09-05'),
 (2, 'Muskelaufbau – Oberkörper', '2024-11-10', '2024-11-10'),
