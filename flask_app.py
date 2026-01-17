@@ -8,23 +8,40 @@ from db import db_read, db_write
 from auth import login_manager, authenticate, register_user
 from flask_login import login_user, logout_user, login_required, current_user
 import logging
+import re
 
+# -------------------------------------------------
+# Logging
+# -------------------------------------------------
 logging.basicConfig(
     level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 
+# -------------------------------------------------
+# Env / Secrets
+# -------------------------------------------------
 load_dotenv()
 W_SECRET = os.getenv("W_SECRET")
 
+# -------------------------------------------------
+# Flask App
+# -------------------------------------------------
 app = Flask(__name__)
 app.config["DEBUG"] = True
 app.secret_key = "supersecret"
 
+# -------------------------------------------------
+# Login Manager
+# -------------------------------------------------
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
+# -------------------------------------------------
+# Helper Functions
+# -------------------------------------------------
 
+# DON'T CHANGE
 def is_valid_signature(x_hub_signature, data, private_key):
     hash_algorithm, github_signature = x_hub_signature.split("=", 1)
     algorithm = hashlib.__dict__.get(hash_algorithm)
@@ -42,7 +59,9 @@ def _first_value(row):
         return row[0]
     return row
 
-
+# -------------------------------------------------
+# Webhook (DON'T CHANGE)
+# -------------------------------------------------
 @app.post("/update_server")
 def webhook():
     x_hub_signature = request.headers.get("X-Hub-Signature")
@@ -53,7 +72,9 @@ def webhook():
         return "Updated PythonAnywhere successfully", 200
     return "Unauthorized", 401
 
-
+# -------------------------------------------------
+# Auth Routes
+# -------------------------------------------------
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
@@ -73,28 +94,13 @@ def login():
 def register():
     error = None
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        vorname = request.form["vorname"]
-        nachname = request.form["nachname"]
-        email = request.form["email"]
-
-        if not vorname or not nachname or not email:
-            error = "Alle Felder müssen ausgefüllt sein."
-            return render_template("auth.html", error=error)
-
-        ok = register_user(username, password)
-        if not ok:
-            error = "Benutzername existiert bereits."
-            return render_template("auth.html", error=error)
-
-        db_write(
-            "INSERT INTO mitglied (vorname, nachname, email) VALUES (%s, %s, %s)",
-            (vorname, nachname, email)
+        ok = register_user(
+            request.form["username"],
+            request.form["password"]
         )
-
-        return redirect(url_for("login"))
-
+        if ok:
+            return redirect(url_for("login"))
+        error = "Benutzername existiert bereits."
     return render_template("auth.html", error=error)
 
 
@@ -104,7 +110,9 @@ def logout():
     logout_user()
     return redirect(url_for("login"))
 
-
+# -------------------------------------------------
+# Main App Route (Todos – unverändert)
+# -------------------------------------------------
 @app.route("/")
 @login_required
 def index():
@@ -114,17 +122,9 @@ def index():
     )
     return render_template("main_page.html", todos=todos)
 
-
-@app.route("/mitglieder")
-@login_required
-def mitglieder():
-    rows = db_read(
-        "SELECT mitglied_id, vorname, nachname, email FROM mitglied ORDER BY nachname, vorname",
-        ()
-    )
-    return render_template("mitglieder.html", rows=rows)
-
-
+# -------------------------------------------------
+# DB EXPLORER (READ ONLY)
+# -------------------------------------------------
 @app.route("/dbexplorer", methods=["GET"])
 @login_required
 def dbexplorer():
@@ -176,6 +176,51 @@ def dbexplorer():
         error=error,
     )
 
+# -------------------------------------------------
+# EINZIGE ERLAUBTE EINGABE: uebung (INSERT ONLY)
+# -------------------------------------------------
+@app.post("/dbexplorer/insert_uebung")
+@login_required
+def insert_uebung():
+    plan_id = request.form.get("plan_id")
+    name = request.form.get("name", "").strip()
+    wiederholungen = request.form.get("wiederholungen", "").strip()
+    dauer = request.form.get("dauer", "").strip()
 
+    try:
+        plan_id = int(plan_id)
+    except (TypeError, ValueError):
+        return redirect(url_for("dbexplorer", table="uebung", error="Ungültiger Trainingsplan"))
+
+    if not name:
+        return redirect(url_for("dbexplorer", table="uebung", error="Übung darf nicht leer sein"))
+
+    try:
+        wiederholungen = int(wiederholungen)
+        if wiederholungen <= 0:
+            raise ValueError()
+    except ValueError:
+        return redirect(url_for("dbexplorer", table="uebung", error="Wiederholungen müssen > 0 sein"))
+
+    if dauer == "":
+        dauer_val = None
+    else:
+        try:
+            dauer_val = int(dauer)
+            if dauer_val <= 0:
+                raise ValueError()
+        except ValueError:
+            return redirect(url_for("dbexplorer", table="uebung", error="Dauer muss positiv sein"))
+
+    db_write(
+        "INSERT INTO uebung (plan_id, name, wiederholungen, dauer) VALUES (%s, %s, %s, %s)",
+        (plan_id, name, wiederholungen, dauer_val)
+    )
+
+    return redirect(url_for("dbexplorer", table="uebung"))
+
+# -------------------------------------------------
+# App Start
+# -------------------------------------------------
 if __name__ == "__main__":
-    app.run()
+    app.run(
