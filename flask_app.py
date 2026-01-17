@@ -1,4 +1,3 @@
-om dotenv import load_dotenv
 import os
 import git
 import hmac
@@ -152,6 +151,79 @@ def dbexplorer():
             for r in raw_cols
         ]
 
+        where_sql = ""
+        params = []
+
+        if filter_column and filter_value and filter_column in columns:
+            where_sql = f" WHERE `{filter_column}` LIKE %s "
+            params.append(f"%{filter_value}%")
+
+        sql = f"SELECT * FROM `{selected_table}`{where_sql} LIMIT %s"
+        params.append(limit)
+        rows = db_read(sql, tuple(params))
+
+    return render_template(
+        "dbexplorer.html",
+        tables=tables,
+        selected_table=selected_table,
+        columns=columns,
+        rows=rows,
+        limit=limit,
+        filter_column=filter_column,
+        filter_value=filter_value,
+        error=error,
+    )
+
+
+# ----------------------------
+# Nur wenn table=uebung: Einfügen erlauben (Übung + Wiederholungen Pflicht, Dauer optional)
+# ----------------------------
+@app.post("/dbexplorer/insert_uebung")
+@login_required
+def insert_uebung():
+    plan_id = request.form.get("plan_id")
+    name = request.form.get("name", "").strip()
+    wiederholungen = request.form.get("wiederholungen", "").strip()
+    dauer = request.form.get("dauer", "").strip()  # optional
+
+    try:
+        plan_id = int(plan_id)
+    except (TypeError, ValueError):
+        return redirect(url_for("dbexplorer", table="uebung", error="Ungültiger Trainingsplan (plan_id)"))
+
+    if not name:
+        return redirect(url_for("dbexplorer", table="uebung", error="Übung darf nicht leer sein"))
+
+    try:
+        wiederholungen_int = int(wiederholungen)
+        if wiederholungen_int <= 0:
+            raise ValueError()
+    except ValueError:
+        return redirect(url_for("dbexplorer", table="uebung", error="Wiederholungen müssen > 0 sein"))
+
+    if dauer == "":
+        dauer_val = None
+    else:
+        try:
+            dauer_val = int(dauer)
+            if dauer_val <= 0:
+                raise ValueError()
+        except ValueError:
+            return redirect(url_for("dbexplorer", table="uebung", error="Dauer muss eine positive Zahl sein"))
+
+    db_write(
+        "INSERT INTO uebung (plan_id, name, wiederholungen, dauer) VALUES (%s, %s, %s, %s)",
+        (plan_id, name, wiederholungen_int, dauer_val)
+    )
+
+    return redirect(url_for("dbexplorer", table="uebung"))
+
+
+# ----------------------------
+# App Start
+# ----------------------------
+if __name__ == 
+app.run()
 
 
 
