@@ -5,7 +5,7 @@ CREATE TABLE mitglied (
     geburtsdatum DATE,
     adresse VARCHAR(250),
     email VARCHAR(150),
-    telefon VARCHAR(30),
+    telefon VARCHAR(50),
     beitrittsdatum DATE,
     status VARCHAR(50), 
     notizen TEXT
@@ -24,7 +24,7 @@ CREATE TABLE kurs (
     kurs_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     beschreibung VARCHAR(250),
-    wochentag VARCHAR(30),
+    wochentag VARCHAR(40),
     startzeit TIME,
     dauer INT,
     raum VARCHAR(50),
